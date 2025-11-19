@@ -11,7 +11,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.app.json",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d build -r https://github.com/DespixZloy/bookingapi.git"
+    "deploy": "gh-pages -d dist -r https://github.com/DespixZloy/bookingapi.git"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.4",

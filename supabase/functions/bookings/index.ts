@@ -245,6 +245,98 @@ Deno.serve(async (req: Request) => {
       });
     }
 
+    // НОВЫЙ ЭНДПОИНТ КОТОРЙЫ, ПОПРОСИЛИ СДЕЛАТЬ
+    if (path.endsWith('/leaderboard') && req.method === 'GET') {
+      // параметры из запроса
+      const period = url.searchParams.get('period') || 'month';
+      const limitParam = url.searchParams.get('limit') || '10';
+      const limit = parseInt(limitParam);
+
+      // проверяем что период валидный
+      if (!['day', 'week', 'month'].includes(period)) {
+        return new Response(
+          JSON.stringify({ error: 'Неправильный период. Допустимо: day, week, month' }),
+          {
+            status: 400,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      // считаем дату начала периода
+      const now = new Date();
+      let startDate = new Date();
+
+      if (period === 'day') {
+        startDate.setDate(now.getDate() - 1);
+      } else if (period === 'week') {
+        startDate.setDate(now.getDate() - 7);
+      } else if (period === 'month') {
+        startDate.setMonth(now.getMonth() - 1);
+      }
+
+      // получаем все брони за период
+      const { data: bookings, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('user_id')
+        .gte('created_at', startDate.toISOString());
+
+      if (bookingsError) {
+        return new Response(
+          JSON.stringify({ error: 'Ошибка при получении бронирований', details: bookingsError.message }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          }
+        );
+      }
+
+      // считаем сколько броней у каждого пользователя
+      const userStats: { [key: string]: number } = {};
+
+      if (bookings) {
+        for (const booking of bookings) {
+          const userId = booking.user_id;
+          userStats[userId] = (userStats[userId] || 0) + 1;
+        }
+      }
+
+      // сортируем по колиичеству броней от большего к меньшему
+      const sortedUsers = Object.entries(userStats)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, limit);
+
+      // формируем ответ с местами
+      const leaderboard = [];
+      let currentPlace = 1;
+      let lastCount: number | null = null;
+
+      for (let i = 0; i < sortedUsers.length; i++) {
+        const [userId, count] = sortedUsers[i];
+
+        // если у текущего пользователя меньше броней чем у предыдущего то увеличиваем место
+        if (lastCount !== null && count < lastCount) {
+          currentPlace = i + 1;
+        }
+
+        leaderboard.push({
+          user_id: userId,
+          place: currentPlace,
+          booking_count: count,
+        });
+
+        lastCount = count;
+      }
+
+      return new Response(
+        JSON.stringify({ leaderboard }),
+        {
+          status: 200,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
+    }
+
     return new Response(
       JSON.stringify({ error: 'Not found' }),
       {
